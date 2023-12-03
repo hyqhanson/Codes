@@ -539,6 +539,7 @@ void printResultPosit(vector<Record> records, string filename, int size, int es)
         y[i] = records_posit[i][1];
     }
 
+    cout << "Linear regression: " << endl;
     double slope, intercept;
     // Perform linear regression
     linearRegression<P>(x, y, slope, intercept);
@@ -559,13 +560,13 @@ void printResultIEEE(vector<Record> records)
 
     cout << setprecision(15);
     posit128_4 absErr = absError<P, T>(records_posit, records);
-    cout << "Single vs Double absolute error: " << absErr << endl;
+    cout << "Absolute error: " << absErr << endl;
 
     posit128_4 relErr = relError<P, T>(records_posit, records);
-    cout << "Single vs Double relative error: " << relErr << endl;
+    cout << "Relative error: " << relErr << endl;
 
     double tol_test_pass = tol_test<P, T>(records_posit, records, 1e6);
-    cout << "Single vs Double tolerance test pass rate: " << setprecision(3) << tol_test_pass << "%" << endl;
+    cout << "Tolerance test pass rate: " << setprecision(3) << tol_test_pass << "%" << endl;
 
     // stringstream name;
 
@@ -584,6 +585,7 @@ void printResultIEEE(vector<Record> records)
         y[i] = records_posit[i][1];
     }
 
+    cout << "Linear regression: " << endl;
     double slope, intercept;
     // Perform linear regression
     linearRegression<P>(x, y, slope, intercept);
@@ -717,7 +719,12 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    cout << "======================" << endl;
+    cout << "Single vs Double: " << endl;
     printResultIEEE<float, double>(records);
+
+    cout << "======================" << endl;
+    cout << "Double vs Double: " << endl;
     printResultIEEE<double, double>(records);
 
     // vector<vector<float>> records_float = convertPosit<float>(records);
