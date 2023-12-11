@@ -153,7 +153,7 @@ vector<Record> parseCSV(const string &filename)
         n = numCol_Ignore;**/
 
         // Parse and add the remaining numerical fields as doubles
-        while (getline(ss, field, ',') )
+        while (getline(ss, field, ','))
         {
             if (isNumeric(field))
             {
@@ -364,7 +364,7 @@ double tol_test(vector<vector<P>> record_posit, vector<Record> records, double f
 }
 
 template <typename P>
-void linearRegression(const vector<P> &x, const vector<P> &y, double &slope, double &intercept)
+void linearRegression(const vector<vector<P>> &x, const vector<P> &y, double &slope, double &intercept)
 {
     // Check if the input vectors have the same size
     if (x.size() != y.size())
@@ -380,14 +380,13 @@ void linearRegression(const vector<P> &x, const vector<P> &y, double &slope, dou
 
     for (size_t i = 0; i < x.size(); ++i)
     {
-        Sx += x[i];
+        Sx += x[i][0];
         Sy += y[i];
-        Sxx += x[i] * x[i];
+        Sxx += x[i][0] * x[i][0];
         Syy += y[i] * y[i];
-        Sxy += x[i] * y[i];
+        Sxy += x[i][0] * y[i];
     }
 
-   
     // Slope = (n*Sxy-Sx*Sy)/(n*Sxx-Sx*Sx)
     // Intercept = Sy/n - slope * (Sx/n)
     posit128_4 numerator = n * Sxy - Sx * Sy;
@@ -403,9 +402,13 @@ void linearRegression(const vector<P> &x, const vector<P> &y, double &slope, dou
     }
 }
 
+// Calculate R-squared using real value y
 template <typename P>
-double RSquared(const vector<P> &x, const vector<P> &y, double slope, double intercept)
+double RSquared(const vector<vector<P>> &x, const vector<P> &y, const vector<double> slope, double intercept)
 {
+    // Number of predictor variables
+    size_t num_independent = x[0].size();
+
     // Calculate mean of y
     double mean_y = 0.0;
     for (size_t i = 0; i < y.size(); ++i)
@@ -422,11 +425,25 @@ double RSquared(const vector<P> &x, const vector<P> &y, double slope, double int
     }
 
     // Calculate Sum of Squared Residuals (SSR)
+    /**
     double SSR = 0.0;
-    for (size_t i = 0; i < x.size(); ++i)
+    for (size_t i = 0; i < y.size(); ++i)
     {
         P predicted_y = slope * x[i] + intercept;
         SSR += ((double)y[i] - (double)predicted_y) * ((double)y[i] - (double)predicted_y);
+    }**/
+
+    double SSR = 0.0;
+    for (size_t i = 0; i < y.size(); ++i)
+    {
+        double predicted_y = intercept; // Intercept term
+
+        for (size_t j = 0; j < num_independent; ++j)
+        {
+            predicted_y += slope[j] * (double)(x[i][j]);
+        }
+
+        SSR += ((double)y[i] - predicted_y) * ((double)y[i] - predicted_y);
     }
 
     // Calculate R-squared
@@ -514,13 +531,13 @@ void printResultPosit(vector<Record> records, string filename, int size, int es)
 
     // Export posit file
     string fname = filename.erase(filename.length() - 4);
- 
+
     // Remove address in name
     if (fname.length() >= 13 && fname.substr(0, 13) == "TestingFiles/")
     {
         fname.erase(0, 13);
     }
-  
+
     stringstream name;
     name << "Generated_files/Generated_" << fname << '_' << to_string(size) << '_' << to_string(es) << ".csv";
 
@@ -529,25 +546,36 @@ void printResultPosit(vector<Record> records, string filename, int size, int es)
     cout << endl;
 
     /*************/
-    // Linear regression
-    vector<P> x(records_posit.size());
+    vector<vector<P>> x(records_posit.size(), vector<P>(records_posit[0].size() - 1));
     vector<P> y(records_posit.size());
-
-    for (int i = 0; i < records_posit.size(); i++)
+    
+    // Simple Linear regression
+    if (records_posit[0].size() == 2)
     {
-        x[i] = records_posit[i][0];
-        y[i] = records_posit[i][1];
+
+        for (size_t i = 0; i < records_posit.size(); ++i)
+        {
+
+            y[i] = records_posit[i][1];
+            for (size_t j = 0; j < records_posit[0].size() - 1; ++j)
+            {
+                x[i][j] = records_posit[i][0];
+            }
+        }
+
+        cout << "Linear regression: " << endl;
+        double intercept;
+        double s;
+        // Perform linear regression
+        linearRegression<P>(x, y, s, intercept);
+        cout << setprecision(10) << "slope: " << s << ", "
+             << "intercept: " << intercept << endl;
+
+        vector<double> slope = {s};
+
+        double rSquared = RSquared(x, y, slope, intercept);
+        cout << "R-squared: " << rSquared << endl;
     }
-
-    cout << "Linear regression: " << endl;
-    double slope, intercept;
-    // Perform linear regression
-    linearRegression<P>(x, y, slope, intercept);
-    cout << setprecision(10) << "slope: " << slope << ", "
-         << "intercept: " << intercept << endl;
-
-    double rSquared = RSquared(x, y, slope, intercept);
-    cout << "R-squared: " << rSquared << endl;
 
     cout << endl;
 }
@@ -556,44 +584,55 @@ template <typename P, typename T>
 void printResultIEEE(vector<Record> records)
 {
 
-    vector<vector<P>> records_posit = convertPosit<P>(records);
+    vector<vector<P>> records_IEEE = convertPosit<P>(records);
 
     cout << setprecision(15);
-    posit128_4 absErr = absError<P, T>(records_posit, records);
+    posit128_4 absErr = absError<P, T>(records_IEEE, records);
     cout << "Absolute error: " << absErr << endl;
 
-    posit128_4 relErr = relError<P, T>(records_posit, records);
+    posit128_4 relErr = relError<P, T>(records_IEEE, records);
     cout << "Relative error: " << relErr << endl;
 
-    double tol_test_pass = tol_test<P, T>(records_posit, records, 1e6);
+    double tol_test_pass = tol_test<P, T>(records_IEEE, records, 1e6);
     cout << "Tolerance test pass rate: " << setprecision(3) << tol_test_pass << "%" << endl;
 
     // stringstream name;
 
     // name << "Generated"  << ".csv";
-    // exportToCSV(records_posit, name.str());
+    // exportToCSV(records_IEEE, name.str());
 
     cout << endl;
     /*************/
-    // Linear regression
-    vector<P> x(records_posit.size());
-    vector<P> y(records_posit.size());
+    vector<vector<P>> x(records_IEEE.size(), vector<P>(records_IEEE[0].size() - 1));
+    vector<P> y(records_IEEE.size());
 
-    for (int i = 0; i < records_posit.size(); i++)
+    // Simple Linear regression
+    if (records_IEEE[0].size() == 2)
     {
-        x[i] = records_posit[i][0];
-        y[i] = records_posit[i][1];
+
+        for (size_t i = 0; i < records_IEEE.size(); ++i)
+        {
+
+            y[i] = records_IEEE[i][1];
+            for (size_t j = 0; j < records_IEEE[0].size() - 1; ++j)
+            {
+                x[i][j] = records_IEEE[i][0];
+            }
+        }
+
+        cout << "Linear regression: " << endl;
+        double intercept;
+        double s;
+        // Perform linear regression
+        linearRegression<P>(x, y, s, intercept);
+        cout << setprecision(10) << "slope: " << s << ", "
+             << "intercept: " << intercept << endl;
+
+        vector<double> slope = {s};
+
+        double rSquared = RSquared(x, y, slope, intercept);
+        cout << "R-squared: " << rSquared << endl;
     }
-
-    cout << "Linear regression: " << endl;
-    double slope, intercept;
-    // Perform linear regression
-    linearRegression<P>(x, y, slope, intercept);
-    cout << setprecision(10) << "slope: " << slope << ", "
-         << "intercept: " << intercept << endl;
-
-    double rSquared = RSquared(x, y, slope, intercept);
-    cout << "R-squared: " << rSquared << endl;
 }
 
 int main(int argc, char **argv)
@@ -601,6 +640,10 @@ int main(int argc, char **argv)
     if (argc < 4)
     {
         cout << "usage: " << argv[0] << " <filename> <Posit size> <Exponent bit size>\n";
+        cout << "<filename> are usually in the format of \"TestingFiles/filename.csv\"\n";
+        cout << "<Posit size> can be selected between 16 or 32 \n";
+        cout << "<Exponent bit size> can be selected between 0,1,2 3 or 4 \n\n";
+        cout << "Example: .\\main TestingFiles/climate_change.csv 32 2\n";
         return 1;
     }
 
@@ -719,11 +762,11 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    cout << "======================" << endl;
+    cout << "====================================" << endl;
     cout << "Single vs Double: " << endl;
     printResultIEEE<float, double>(records);
 
-    cout << "======================" << endl;
+    cout << "====================================" << endl;
     cout << "Double vs Double: " << endl;
     printResultIEEE<double, double>(records);
 
