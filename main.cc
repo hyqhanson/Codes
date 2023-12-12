@@ -5,6 +5,8 @@
 #include <string>
 #include <stdexcept>
 #include <universal/number/posit/posit.hpp>
+#include "class.h"
+#include "MultLinearReg.cc"
 
 using namespace sw::universal;
 using namespace std;
@@ -364,7 +366,7 @@ double tol_test(vector<vector<P>> record_posit, vector<Record> records, double f
 }
 
 template <typename P>
-void linearRegression(const vector<vector<P>> &x, const vector<P> &y, double &slope, double &intercept)
+void linearRegression(const vector<vector<P>> &x, const vector<P> &y, P &slope, P &intercept)
 {
     // Check if the input vectors have the same size
     if (x.size() != y.size())
@@ -393,8 +395,8 @@ void linearRegression(const vector<vector<P>> &x, const vector<P> &y, double &sl
     posit128_4 denominator = n * Sxx - Sx * Sx;
     if (denominator != 0)
     {
-        slope = (double)numerator / (double)denominator;
-        intercept = (double)Sy / n - slope * ((double)Sx / n);
+        slope = (P)numerator / (P)denominator;
+        intercept = (P)Sy / n - (P)slope * ((P)Sx / n);
     }
     else
     {
@@ -404,7 +406,7 @@ void linearRegression(const vector<vector<P>> &x, const vector<P> &y, double &sl
 
 // Calculate R-squared using real value y
 template <typename P>
-double RSquared(const vector<vector<P>> &x, const vector<P> &y, const vector<double> slope, double intercept)
+double RSquared(const vector<vector<P>> &x, const vector<P> &y, const vector<P> theta)
 {
     // Number of predictor variables
     size_t num_independent = x[0].size();
@@ -436,11 +438,11 @@ double RSquared(const vector<vector<P>> &x, const vector<P> &y, const vector<dou
     double SSR = 0.0;
     for (size_t i = 0; i < y.size(); ++i)
     {
-        double predicted_y = intercept; // Intercept term
+        double predicted_y = (double)theta[0]; // Intercept term
 
         for (size_t j = 0; j < num_independent; ++j)
         {
-            predicted_y += slope[j] * (double)(x[i][j]);
+            predicted_y += (double)theta[j + 1] * (double)(x[i][j]);
         }
 
         SSR += ((double)y[i] - predicted_y) * ((double)y[i] - predicted_y);
@@ -488,7 +490,7 @@ void exportToCSV(const vector<vector<P>> &data, const string &filename)
 
 // Print the errors corresponding to a precision
 template <typename P, typename T>
-void printResultPosit(vector<Record> records, string filename, int size, int es)
+void printResultPosit(vector<Record> records, string filename, int size, int es, bool regression)
 {
 
     vector<vector<P>> records_posit = convertPosit<P>(records);
@@ -548,40 +550,64 @@ void printResultPosit(vector<Record> records, string filename, int size, int es)
     /*************/
     vector<vector<P>> x(records_posit.size(), vector<P>(records_posit[0].size() - 1));
     vector<P> y(records_posit.size());
-    
-    // Simple Linear regression
-    if (records_posit[0].size() == 2)
-    {
 
-        for (size_t i = 0; i < records_posit.size(); ++i)
+    if (regression)
+    {
+        // Simple Linear regression
+        if (records_posit[0].size() == 2)
         {
 
-            y[i] = records_posit[i][1];
-            for (size_t j = 0; j < records_posit[0].size() - 1; ++j)
+            for (size_t i = 0; i < records_posit.size(); ++i)
             {
-                x[i][j] = records_posit[i][0];
+
+                y[i] = records_posit[i][1];
+                for (size_t j = 0; j < records_posit[0].size() - 1; ++j)
+                {
+                    x[i][j] = records_posit[i][0];
+                }
             }
+
+            cout << "Linear regression: " << endl;
+            P intercept;
+            P slope;
+            // Perform linear regression
+            linearRegression<P>(x, y, slope, intercept);
+            cout << setprecision(10) << "slope: " << slope << ", "
+                 << "intercept: " << intercept << endl;
+
+            vector<P> theta = {intercept, slope};
+
+            double rSquared = RSquared(x, y, theta);
+            cout << "R-squared: " << rSquared << endl;
         }
 
-        cout << "Linear regression: " << endl;
-        double intercept;
-        double s;
-        // Perform linear regression
-        linearRegression<P>(x, y, s, intercept);
-        cout << setprecision(10) << "slope: " << s << ", "
-             << "intercept: " << intercept << endl;
+        int numFeatures = x[0].size();
+        double learningRate = 0.00001;
+        int numIterations = 1000;
+        MultipleLinearRegression<P> model(numFeatures, learningRate);
+        model.train(x, y, numIterations);
 
-        vector<double> slope = {s};
+        vector<P> learnedTheta = model.getTheta();
+        cout << "Learned Parameters (Theta): ";
+        for (P thetaValue : learnedTheta)
+        {
+            cout << thetaValue << " ";
+        }
+        cout << endl;
 
-        double rSquared = RSquared(x, y, slope, intercept);
+        vector<P> testFeatures = {5};
+        P prediction = model.predict(testFeatures);
+        cout << "Prediction: " << prediction << endl;
+
+        double rSquared = RSquared(x, y, learnedTheta);
         cout << "R-squared: " << rSquared << endl;
-    }
 
-    cout << endl;
+        cout << endl;
+    }
 }
 
 template <typename P, typename T>
-void printResultIEEE(vector<Record> records)
+void printResultIEEE(vector<Record> records, bool regression)
 {
 
     vector<vector<P>> records_IEEE = convertPosit<P>(records);
@@ -606,44 +632,81 @@ void printResultIEEE(vector<Record> records)
     vector<vector<P>> x(records_IEEE.size(), vector<P>(records_IEEE[0].size() - 1));
     vector<P> y(records_IEEE.size());
 
-    // Simple Linear regression
-    if (records_IEEE[0].size() == 2)
+    if (regression)
     {
+        // Simple Linear regression
+        if (records_IEEE[0].size() == 2)
+        {
+
+            for (size_t i = 0; i < records_IEEE.size(); ++i)
+            {
+                // y is at the first column
+                y[i] = records_IEEE[i][0];
+                for (size_t j = 0; j < records_IEEE[0].size() - 1; ++j)
+                {
+                    x[i][j] = records_IEEE[i][1];
+                }
+            }
+
+            cout << "Linear regression: " << endl;
+            P intercept;
+            P slope;
+            // Perform linear regression
+            linearRegression<P>(x, y, slope, intercept);
+            cout << setprecision(10) << "slope: " << slope << ", "
+                 << "intercept: " << intercept << endl;
+
+            vector<P> theta = {intercept, slope};
+
+            double rSquared = RSquared(x, y, theta);
+            cout << "R-squared: " << rSquared << endl;
+        }
+
+        // Multiple linear regression
 
         for (size_t i = 0; i < records_IEEE.size(); ++i)
         {
-
-            y[i] = records_IEEE[i][1];
+            // y is at the first column
+            y[i] = records_IEEE[i][0];
             for (size_t j = 0; j < records_IEEE[0].size() - 1; ++j)
             {
-                x[i][j] = records_IEEE[i][0];
+                x[i][j] = records_IEEE[i][1];
             }
         }
 
-        cout << "Linear regression: " << endl;
-        double intercept;
-        double s;
-        // Perform linear regression
-        linearRegression<P>(x, y, s, intercept);
-        cout << setprecision(10) << "slope: " << s << ", "
-             << "intercept: " << intercept << endl;
+        int numFeatures = x[0].size();
+        double learningRate = 0.00001;
+        int numIterations = 1000;
+        MultipleLinearRegression<P> model(numFeatures, learningRate);
+        model.train(x, y, numIterations);
 
-        vector<double> slope = {s};
+        vector<P> learnedTheta = model.getTheta();
+        cout << "Learned Parameters (Theta): ";
+        for (P thetaValue : learnedTheta)
+        {
+            cout << thetaValue << " ";
+        }
+        cout << endl;
 
-        double rSquared = RSquared(x, y, slope, intercept);
+        vector<P> testFeatures = {5};
+        P prediction = model.predict(testFeatures);
+        cout << "Prediction: " << prediction << endl;
+
+        double rSquared = RSquared(x, y, learnedTheta);
         cout << "R-squared: " << rSquared << endl;
     }
 }
 
 int main(int argc, char **argv)
 {
-    if (argc < 4)
+    if (argc < 5)
     {
-        cout << "usage: " << argv[0] << " <filename> <Posit size> <Exponent bit size>\n";
+        cout << "usage: " << argv[0] << " <filename> <Posit size> <Exponent bit size> <DO or NOT DO regression>\n";
         cout << "<filename> are usually in the format of \"TestingFiles/filename.csv\"\n";
         cout << "<Posit size> can be selected between 16 or 32 \n";
-        cout << "<Exponent bit size> can be selected between 0,1,2 3 or 4 \n\n";
-        cout << "Example: .\\main TestingFiles/climate_change.csv 32 2\n";
+        cout << "<Exponent bit size> can be selected between 0,1,2 3 or 4 \n";
+        cout << "<DO or NOT DO regression> can be decided by using 0: not do regression, or other number: do regression \n\n";
+        cout << "Example: .\\main TestingFiles/climate_change.csv 32 2 1\n";
         return 1;
     }
 
@@ -684,6 +747,7 @@ int main(int argc, char **argv)
 
     unsigned int p_size = stoi(argv[2]);
     unsigned int p_es = stoi(argv[3]);
+    bool regression = (stoi(argv[4]) != 0);
 
     posit128_4 absErr;
     posit128_4 relErr;
@@ -693,29 +757,29 @@ int main(int argc, char **argv)
         if (p_es == 0)
         {
             cout << properties<16, 0>();
-            printResultPosit<posit16_0, double>(records, filename, p_size, p_es);
+            printResultPosit<posit16_0, double>(records, filename, p_size, p_es,regression);
         }
 
         else if (p_es == 1)
         {
             cout << properties<16, 1>();
-            printResultPosit<posit16_1, double>(records, filename, p_size, p_es);
+            printResultPosit<posit16_1, double>(records, filename, p_size, p_es,regression);
         }
         else if (p_es == 2)
         {
             cout << properties<16, 2>();
-            printResultPosit<posit16_2, double>(records, filename, p_size, p_es);
+            printResultPosit<posit16_2, double>(records, filename, p_size, p_es,regression);
         }
         else if (p_es == 3)
         {
             cout << properties<16, 3>();
-            printResultPosit<posit16_3, double>(records, filename, p_size, p_es);
+            printResultPosit<posit16_3, double>(records, filename, p_size, p_es,regression);
         }
 
         else if (p_es == 4)
         {
             cout << properties<16, 4>();
-            printResultPosit<posit16_4, double>(records, filename, p_size, p_es);
+            printResultPosit<posit16_4, double>(records, filename, p_size, p_es,regression);
         }
         else
         {
@@ -728,27 +792,27 @@ int main(int argc, char **argv)
         if (p_es == 0)
         {
             cout << properties<32, 0>();
-            printResultPosit<posit32_0, double>(records, filename, p_size, p_es);
+            printResultPosit<posit32_0, double>(records, filename, p_size, p_es,regression);
         }
         else if (p_es == 1)
         {
             cout << properties<32, 1>();
-            printResultPosit<posit32_1, double>(records, filename, p_size, p_es);
+            printResultPosit<posit32_1, double>(records, filename, p_size, p_es,regression);
         }
         else if (p_es == 2)
         {
             cout << properties<32, 2>();
-            printResultPosit<posit32_2, double>(records, filename, p_size, p_es);
+            printResultPosit<posit32_2, double>(records, filename, p_size, p_es,regression);
         }
         else if (p_es == 3)
         {
             cout << properties<32, 3>();
-            printResultPosit<posit32_3, double>(records, filename, p_size, p_es);
+            printResultPosit<posit32_3, double>(records, filename, p_size, p_es,regression);
         }
         else if (p_es == 4)
         {
             cout << properties<32, 4>();
-            printResultPosit<posit32_4, double>(records, filename, p_size, p_es);
+            printResultPosit<posit32_4, double>(records, filename, p_size, p_es,regression);
         }
         else
         {
@@ -764,11 +828,11 @@ int main(int argc, char **argv)
 
     cout << "====================================" << endl;
     cout << "Single vs Double: " << endl;
-    printResultIEEE<float, double>(records);
+    printResultIEEE<float, double>(records, regression);
 
     cout << "====================================" << endl;
     cout << "Double vs Double: " << endl;
-    printResultIEEE<double, double>(records);
+    printResultIEEE<double, double>(records, regression);
 
     // vector<vector<float>> records_float = convertPosit<float>(records);
 
@@ -787,5 +851,6 @@ int main(int argc, char **argv)
     posit128_4 relErr_diff = relErr_float / relErr;
     cout << "recision difference based on Relative error: " << relErr_diff << endl;
     **/
+
     return 0;
 }
