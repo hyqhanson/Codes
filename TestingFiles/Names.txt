@@ -1,1 +1,6 @@
-test.csv
+creditcard.csv
+Stock.csv
+climate_change.csv
+winequality.csv
+Marketing.csv
+
