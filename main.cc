@@ -642,7 +642,7 @@ void printResultPosit(vector<Record> records, string filename, int size, int es,
 
         vector<int> trainingLabel, testingLabel;
         vector<vector<P>> trainingSet, testingSet;
-        double trainingRatio = 0.8;
+        double trainingRatio = 0.7;
 
         // Create training set and testing set
         splitVector(labels, trainingLabel, testingLabel, trainingRatio);
@@ -768,7 +768,7 @@ void printResultIEEE(vector<Record> records, int models, double learningRate, in
 
         vector<int> trainingLabel, testingLabel;
         vector<vector<P>> trainingSet, testingSet;
-        double trainingRatio = 0.8;
+        double trainingRatio = 0.7;
 
         // Create training set and testing set
         splitVector(labels, trainingLabel, testingLabel, trainingRatio);

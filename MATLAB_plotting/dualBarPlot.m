@@ -1,5 +1,5 @@
 
-function dualBarPlot(values1, values2, categories,titles,valuename1,valuename2)
+function dualBarPlot(values1, values2, categories,titles,valuename1,valuename2,color1,color2)
     % Determine the number of categories
     numCategories = length(categories);
     
@@ -12,9 +12,9 @@ function dualBarPlot(values1, values2, categories,titles,valuename1,valuename2)
     
     % Create a side-by-side bar plot
     figure;
-    bar(x1, values1, barWidth, 'b', 'DisplayName', valuename1);
+    bar(x1, values1, barWidth, color1, 'DisplayName', valuename1);
     hold on;
-    bar(x2, values2, barWidth, 'r', 'DisplayName', valuename2);
+    bar(x2, values2, barWidth, color2, 'DisplayName', valuename2);
     
     % Add labels and title
     xlabel('Posits');
@@ -26,7 +26,7 @@ function dualBarPlot(values1, values2, categories,titles,valuename1,valuename2)
     xticklabels(categories);
     
     % Add a legend
-    legend('show');
+    legend('show','Location', 'southwestoutside');
     
     % Display the grid
     grid on;

@@ -83,29 +83,3 @@ int LogisticRegression<P>::roundProbability(P probability, P threshold)
     return (probability >= threshold) ? 1 : 0;
 }
 
-/**
-int main() {
-    // Example usage for Logistic Regression
-    vector<vector<P>> input_data = {{1, 2}, {2, 3}, {3, 4}, {4, 5}};
-    vector<int> labels = {0, 0, 1, 1};  // Binary class labels (0 or 1)
-
-    P learningRate = 0.01;
-    int numIterations = 1000;
-
-    LogisticRegression logistic_model(input_data, labels, learningRate);
-
-    // Train the Logistic Regression
-    logistic_model.train(numIterations);
-
-    // Display the learned parameters
-    logistic_model.displayParameters();
-
-    // Test the Logistic Regression
-    vector<P> test_input = {5, 6};
-    P prediction = logistic_model.predict(test_input);
-
-    cout << "Prediction: " << prediction << endl;
-
-    return 0;
-}
-**/

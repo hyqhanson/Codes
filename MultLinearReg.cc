@@ -9,7 +9,7 @@ template <typename P>
 MultipleLinearRegression<P>::MultipleLinearRegression(int numFeatures, double learningRate)
     : numFeatures(numFeatures), learningRate(learningRate)
 {
-    // Initialize theta with zeros
+    // Initialize theta with ones
     theta.resize(numFeatures + 1, 1.0);
 }
 
@@ -103,36 +103,3 @@ P MultipleLinearRegression<P>::Cost(const vector<vector<P>> &X, const vector<P> 
     return totalError / (2 * m);
 }
 
-/**
-int main() {
-    // Example usage
-    // Assuming a dataset with two features and a target variable
-    vector<vector<posit32_2>> X = {{1.0, 2.0}, {2.0, 3.0}, {3.0, 4.0}};
-    vector<posit32_2> y = {5.0, 8.0, 11.0};
-
-    int numFeatures = X[0].size();  // Number of features
-    posit32_2 learningRate = 0.01;
-    int numIterations = 1000;
-
-    MultipleLinearRegression<posit32_2> model(numFeatures, learningRate);
-    model.train(X, y, numIterations);
-
-    // Make predictions
-    vector<posit32_2> testFeatures = {4.0, 5.0};
-    posit32_2 prediction = model.predict(testFeatures);
-
-    // Display the learned parameters
-    vector<posit32_2> learnedTheta = model.getTheta();
-    cout << "Learned Parameters (Theta): ";
-    for (posit32_2 thetaValue : learnedTheta) {
-        cout << thetaValue << " ";
-    }
-    cout << endl;
-
-    // Display the prediction
-    cout << "Prediction: " << prediction << endl;
-
-
-    return 0;
-}
-**/
