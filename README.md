@@ -14,11 +14,17 @@ To run the program and conduct tests, follow the guides below:
 <Posit size> can be selected between 16 or 32
 <Exponent bit size> can be selected between 0,1,2 3 or 4 
 <Regression/Classification> can be decided by using 0: DON'T DO any model, or 1: do regression, or 2: do binary classfication
-
-Example: ./main TestingFiles/Marketing.csv 32 2 1 1000 0.00002
-This will use the dataset 'Marketing_new.csv' with 32 bits Posit with 2 es value, it will conduct linear regression with 1000 iteration and 0.00002 learning rate.
 ```
+
+Example:
+```
+ ./main TestingFiles/Marketing.csv 32 2 1 1000 0.00002
+```
+
+This will use the dataset 'Marketing_new.csv' with 32 bits Posit with 2 es value, it will conduct linear regression with 1000 iteration and 0.00002 learning rate.
+
 The output will show information as below:
+
 ```
 Parse completed: TestingFiles/Marketing.csv
 The total number of data is: 684
