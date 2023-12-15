@@ -7,6 +7,7 @@
 #include <universal/number/posit/posit.hpp>
 #include "class.h"
 #include "MultLinearReg.cc"
+#include "Logistic.cc"
 
 using namespace sw::universal;
 using namespace std;
@@ -95,6 +96,7 @@ float Record::getField<float>(size_t index) const
     }
 }
 
+// Check if the input data is numerical
 bool isNumeric(const string &s)
 {
     if (s.empty())
@@ -123,6 +125,7 @@ bool isNumeric(const string &s)
     return true;
 }
 
+// Read CSV file and convert it as a record object
 vector<Record> parseCSV(const string &filename)
 {
     vector<Record> records;
@@ -170,6 +173,7 @@ vector<Record> parseCSV(const string &filename)
     return records;
 }
 
+// Convert record object into a Posit 2d vector
 template <typename P>
 vector<vector<P>> convertPosit(vector<Record> records)
 {
@@ -189,6 +193,7 @@ vector<vector<P>> convertPosit(vector<Record> records)
     return records_posit;
 }
 
+// Print Posit properties
 template <size_t nbits, size_t es>
 string properties()
 {
@@ -215,53 +220,7 @@ string properties()
     return ostr.str();
 }
 
-/** Calculate average absolute and relative error of record in IEEE double compare to in posits
- *
- *
- **/
-/**
-template <typename P, typename T>
-void Errors(const vector<vector<P>> record_posit, const vector<Record> records, posit128_4& avg_absError, posit128_4& avg_relError)
-{
-    int row = record_posit.size();
-    int col = record_posit[0].size();
-
-    posit128_4 abs_sum = 0;
-    posit128_4 rel_sum = 0;
-
-    posit128_4 abs_error;
-    posit128_4 rel_error;
-
-    int n = 0;
-    int zeros = 0;
-    for (const Record &record : records)
-    {
-        for (size_t i = 0; i < record.getFieldCount(); ++i)
-        {
-            if (record.getField<T>(i) != 0)
-            {
-            abs_error = abs(record.getField<T>(i) - double(record_posit[n][i]));
-            rel_error = abs(abs_error / record.getField<T>(i));
-
-            abs_sum += abs_error;
-            rel_sum += rel_error;
-            }
-            else if (record.getField<T>(i) == 0)
-            {
-                zeros++;
-            }
-        }
-        n++;
-    }
-
-    avg_absError = abs_sum / (row * col - zeros);
-
-    avg_relError = rel_sum / (row * col - zeros);
-
-
-}
-**/
-
+// Mean absolute error between type P and type T
 template <typename P, typename T>
 posit128_4 absError(vector<vector<P>> record_posit, vector<Record> records)
 {
@@ -294,10 +253,7 @@ posit128_4 absError(vector<vector<P>> record_posit, vector<Record> records)
     return avgError;
 }
 
-/** Calculate relative error of record in IEEE double and in posits
- *
- *
- **/
+// Mean relative error between type P and type T
 template <typename P, typename T>
 posit128_4 relError(vector<vector<P>> record_posit, vector<Record> records)
 {
@@ -331,9 +287,13 @@ posit128_4 relError(vector<vector<P>> record_posit, vector<Record> records)
     return avgError;
 }
 
+// Threshold test between type P and type T
 template <typename P, typename T>
-double tol_test(vector<vector<P>> record_posit, vector<Record> records, double factor)
+double tol_test(vector<vector<P>> record_posit, vector<Record> records)
 {
+    // factor that changes the threshold
+    double factor = 1e8;
+
     int row = record_posit.size();
     int col = record_posit[0].size();
 
@@ -346,15 +306,14 @@ double tol_test(vector<vector<P>> record_posit, vector<Record> records, double f
 
     for (const Record &record : records)
     {
-        for (size_t i = 0; i < record.getFieldCount(); ++i)
+
+        for (size_t i = 0; i < record.getFieldCount(); i++)
         {
-            // Avoid division by 0
-            if (record.getField<T>(i) != 0)
-            {
-                posit128_4 diff = abs(record.getField<T>(i) - double(record_posit[n][i]));
-                if (diff <= eps_d * factor)
-                    count++;
-            }
+            posit128_4 diff = abs(record.getField<T>(i) - (double)(record_posit[n][i]));
+            // cout << record_posit[n][i] << endl;
+            // cout << diff << "    " << eps_d * factor << endl;
+            if (diff <= eps_d * factor)
+                count++;
         }
         n++;
     }
@@ -365,6 +324,62 @@ double tol_test(vector<vector<P>> record_posit, vector<Record> records, double f
     return percentage;
 }
 
+
+// Generic function to split a vector into training and testing sets
+template <typename T>
+void splitVector(const vector<T> &original,
+                 vector<T> &trainingSet,
+                 vector<T> &testingSet,
+                 double trainingRatio)
+{
+    // Calculate the number of elements for the training set
+    size_t trainingSize = static_cast<size_t>(original.size() * trainingRatio);
+
+    // Reserve space for the training and testing sets
+    trainingSet.reserve(trainingSize);
+    testingSet.reserve(original.size() - trainingSize);
+
+    // Copy elements to the training set
+    for (size_t i = 0; i < trainingSize; ++i)
+    {
+        trainingSet.push_back(original[i]);
+    }
+
+    // Copy remaining elements to the testing set
+    for (size_t i = trainingSize; i < original.size(); ++i)
+    {
+        testingSet.push_back(original[i]);
+    }
+}
+
+// Overload for 2D vectors
+template <typename T>
+void splitVector(const vector<vector<T>> &original,
+                 vector<vector<T>> &trainingSet,
+                 vector<vector<T>> &testingSet,
+                 double trainingRatio)
+{
+    // Calculate the number of rows for the training set
+    size_t trainingRows = static_cast<size_t>(original.size() * trainingRatio);
+
+    // Reserve space for the training and testing sets
+    trainingSet.reserve(trainingRows);
+    testingSet.reserve(original.size() - trainingRows);
+
+    // Copy rows to the training set
+    for (size_t i = 0; i < trainingRows; ++i)
+    {
+        trainingSet.push_back(original[i]);
+    }
+
+    // Copy remaining rows to the testing set
+    for (size_t i = trainingRows; i < original.size(); ++i)
+    {
+        testingSet.push_back(original[i]);
+    }
+}
+
+// Simple linear regression, solve system with only one independent variable without iteration
 template <typename P>
 void linearRegression(const vector<vector<P>> &x, const vector<P> &y, P &slope, P &intercept)
 {
@@ -404,9 +419,38 @@ void linearRegression(const vector<vector<P>> &x, const vector<P> &y, P &slope, 
     }
 }
 
+// Function to calculate accuracy for binary classfication
+template <typename T>
+double accuracy(const vector<T> &predicted, const vector<T> &actual)
+{
+    // Check if the sizes of predicted and actual vectors are the same
+    if (predicted.size() != actual.size())
+    {
+        cerr << "Error: The sizes of predicted and actual values must be the same.\n";
+        return 0.0;
+    }
+
+    size_t correctCount = 0;
+
+    // Count the number of correct predictions
+    for (size_t i = 0; i < predicted.size(); ++i)
+    {
+        if (predicted[i] == actual[i])
+        {
+            correctCount++;
+            
+        }
+    }
+
+    double result = (double)(correctCount) / predicted.size() * 100;
+    // Calculate and return the accuracy
+    return result;
+}
+
 // Calculate R-squared using real value y
-template <typename P>
-double RSquared(const vector<vector<P>> &x, const vector<P> &y, const vector<P> theta)
+// theta[0] is the intercept, theta[i] where i != 0 is the slope i
+template <typename T>
+double RSquared(const vector<vector<T>> &x, const vector<T> &y, const vector<T> theta)
 {
     // Number of predictor variables
     size_t num_independent = x[0].size();
@@ -425,15 +469,6 @@ double RSquared(const vector<vector<P>> &x, const vector<P> &y, const vector<P> 
     {
         SST += ((double)y[i] - mean_y) * ((double)y[i] - mean_y);
     }
-
-    // Calculate Sum of Squared Residuals (SSR)
-    /**
-    double SSR = 0.0;
-    for (size_t i = 0; i < y.size(); ++i)
-    {
-        P predicted_y = slope * x[i] + intercept;
-        SSR += ((double)y[i] - (double)predicted_y) * ((double)y[i] - (double)predicted_y);
-    }**/
 
     double SSR = 0.0;
     for (size_t i = 0; i < y.size(); ++i)
@@ -490,37 +525,11 @@ void exportToCSV(const vector<vector<P>> &data, const string &filename)
 
 // Print the errors corresponding to a precision
 template <typename P, typename T>
-void printResultPosit(vector<Record> records, string filename, int size, int es, bool regression)
+void printResultPosit(vector<Record> records, string filename, int size, int es, int models, double learningRate, int numIterations)
 {
 
     vector<vector<P>> records_posit = convertPosit<P>(records);
 
-    // posit128_4 absErr;
-    // posit128_4 relErr;
-    // Errors<P, T>(records_posit, records, absErr, relErr);
-
-    /**
-   // Print dataset in Posit for testing
-   for (const vector<P> p : records_posit)
-   {
-       for (int i = 0; i < p.size(); i++)
-       {
-           cout << setprecision(10) << double(p[i]) << ", ";
-       }
-       cout << endl;
-   }
-   cout << endl;
-
-   // Print dataset in IEEE for testing
-   for (const Record &record : records)
-   {
-       // Example: Print all fields
-       for (size_t i = 0; i < record.getFieldCount(); ++i)
-       {
-           cout << record.getField<T>(i) << ", ";
-       }
-       cout << endl;
-   }**/
     cout << setprecision(15);
     posit128_4 absErr = absError<P, T>(records_posit, records);
     cout << "Posit vs Double absolute error: " << absErr << endl;
@@ -528,8 +537,8 @@ void printResultPosit(vector<Record> records, string filename, int size, int es,
     posit128_4 relErr = relError<P, T>(records_posit, records);
     cout << "Posit vs Double relative error: " << relErr << endl;
 
-    double tol_test_pass = tol_test<P, T>(records_posit, records, 1e6);
-    cout << "Posit vs Double tolerance test pass rate: " << setprecision(3) << tol_test_pass << "%" << endl;
+    double tol_test_pass = tol_test<P, T>(records_posit, records);
+    cout << "Posit vs Double tolerance test pass rate: " << setprecision(4) << tol_test_pass << "%" << endl;
 
     // Export posit file
     string fname = filename.erase(filename.length() - 4);
@@ -551,7 +560,7 @@ void printResultPosit(vector<Record> records, string filename, int size, int es,
     vector<vector<P>> x(records_posit.size(), vector<P>(records_posit[0].size() - 1));
     vector<P> y(records_posit.size());
 
-    if (regression)
+    if (models == 1)
     {
         // Simple Linear regression
         if (records_posit[0].size() == 2)
@@ -560,14 +569,14 @@ void printResultPosit(vector<Record> records, string filename, int size, int es,
             for (size_t i = 0; i < records_posit.size(); ++i)
             {
 
-                y[i] = records_posit[i][1];
+                y[i] = records_posit[i][0];
                 for (size_t j = 0; j < records_posit[0].size() - 1; ++j)
                 {
-                    x[i][j] = records_posit[i][0];
+                    x[i][j] = records_posit[i][1];
                 }
             }
 
-            cout << "Linear regression: " << endl;
+            cout << "Using simple linear regression: " << endl;
             P intercept;
             P slope;
             // Perform linear regression
@@ -578,15 +587,29 @@ void printResultPosit(vector<Record> records, string filename, int size, int es,
             vector<P> theta = {intercept, slope};
 
             double rSquared = RSquared(x, y, theta);
-            cout << "R-squared: " << rSquared << endl;
+            cout << "R-squared: " << rSquared << endl
+                 << endl;
+        }
+
+        // Multiple linear regression
+        cout << "Using multiple linear regression: " << endl;
+        for (size_t i = 0; i < records_posit.size(); ++i)
+        {
+            // y is at the first column
+            y[i] = records_posit[i][0];
+            for (size_t j = 0; j < records_posit[0].size() - 1; ++j)
+            {
+                x[i][j] = records_posit[i][j + 1];
+            }
         }
 
         int numFeatures = x[0].size();
-        double learningRate = 0.00001;
-        int numIterations = 1000;
+        //double learningRate = 0.00002;
+        //int numIterations = 1000;
         MultipleLinearRegression<P> model(numFeatures, learningRate);
         model.train(x, y, numIterations);
 
+        cout << setprecision(10);
         vector<P> learnedTheta = model.getTheta();
         cout << "Learned Parameters (Theta): ";
         for (P thetaValue : learnedTheta)
@@ -595,19 +618,57 @@ void printResultPosit(vector<Record> records, string filename, int size, int es,
         }
         cout << endl;
 
-        vector<P> testFeatures = {5};
-        P prediction = model.predict(testFeatures);
-        cout << "Prediction: " << prediction << endl;
-
         double rSquared = RSquared(x, y, learnedTheta);
-        cout << "R-squared: " << rSquared << endl;
 
+        cout << "R-squared: " << rSquared << endl;
         cout << endl;
+    }
+
+    // Binary Classification
+    else if (models == 2)
+    {
+        vector<int> labels(records_posit.size());
+        // Logistic regression
+        cout << "Using logistic regression: " << endl;
+        for (size_t i = 0; i < records_posit.size(); ++i)
+        {
+            // labels is at the first column
+            labels[i] = (int)records_posit[i][0];
+            for (size_t j = 0; j < records_posit[0].size() - 1; ++j)
+            {
+                x[i][j] = records_posit[i][j + 1];
+            }
+        }
+
+        vector<int> trainingLabel, testingLabel;
+        vector<vector<P>> trainingSet, testingSet;
+        double trainingRatio = 0.8;
+
+        // Create training set and testing set
+        splitVector(labels, trainingLabel, testingLabel, trainingRatio);
+        splitVector(x, trainingSet, testingSet, trainingRatio);
+
+        //double learningRate = 0.000002;
+        //int numIterations = 100;
+        LogisticRegression<P> logistic_model(trainingSet, trainingLabel, learningRate);
+
+        // Train the Logistic Regression
+        logistic_model.train(numIterations);
+
+        vector<int> result;
+        for (const auto &row : testingSet)
+        {
+            P prediction = logistic_model.predict(row);
+            int resultLabels = logistic_model.roundProbability(prediction,0.3);
+            result.push_back(resultLabels);  
+        }
+        cout << "Use " << trainingRatio << " total data for training the model." << endl;
+        cout << "Accuracy is " << accuracy(result, testingLabel) << "%" << endl;
     }
 }
 
 template <typename P, typename T>
-void printResultIEEE(vector<Record> records, bool regression)
+void printResultIEEE(vector<Record> records, int models, double learningRate, int numIterations)
 {
 
     vector<vector<P>> records_IEEE = convertPosit<P>(records);
@@ -619,20 +680,15 @@ void printResultIEEE(vector<Record> records, bool regression)
     posit128_4 relErr = relError<P, T>(records_IEEE, records);
     cout << "Relative error: " << relErr << endl;
 
-    double tol_test_pass = tol_test<P, T>(records_IEEE, records, 1e6);
-    cout << "Tolerance test pass rate: " << setprecision(3) << tol_test_pass << "%" << endl;
-
-    // stringstream name;
-
-    // name << "Generated"  << ".csv";
-    // exportToCSV(records_IEEE, name.str());
+    double tol_test_pass = tol_test<P, T>(records_IEEE, records);
+    cout << "Tolerance test pass rate: " << setprecision(4) << tol_test_pass << "%" << endl;
 
     cout << endl;
     /*************/
     vector<vector<P>> x(records_IEEE.size(), vector<P>(records_IEEE[0].size() - 1));
     vector<P> y(records_IEEE.size());
 
-    if (regression)
+    if (models == 1)
     {
         // Simple Linear regression
         if (records_IEEE[0].size() == 2)
@@ -659,27 +715,29 @@ void printResultIEEE(vector<Record> records, bool regression)
             vector<P> theta = {intercept, slope};
 
             double rSquared = RSquared(x, y, theta);
-            cout << "R-squared: " << rSquared << endl;
+            cout << "R-squared: " << rSquared << endl
+                 << endl;
         }
 
         // Multiple linear regression
-
+        cout << "Using multiple linear regression: " << endl;
         for (size_t i = 0; i < records_IEEE.size(); ++i)
         {
             // y is at the first column
             y[i] = records_IEEE[i][0];
             for (size_t j = 0; j < records_IEEE[0].size() - 1; ++j)
             {
-                x[i][j] = records_IEEE[i][1];
+                x[i][j] = records_IEEE[i][j + 1];
             }
         }
 
         int numFeatures = x[0].size();
-        double learningRate = 0.00001;
-        int numIterations = 1000;
+        //double learningRate = 0.00002;
+        //int numIterations = 1000;
         MultipleLinearRegression<P> model(numFeatures, learningRate);
         model.train(x, y, numIterations);
 
+        cout << setprecision(10);
         vector<P> learnedTheta = model.getTheta();
         cout << "Learned Parameters (Theta): ";
         for (P thetaValue : learnedTheta)
@@ -688,25 +746,63 @@ void printResultIEEE(vector<Record> records, bool regression)
         }
         cout << endl;
 
-        vector<P> testFeatures = {5};
-        P prediction = model.predict(testFeatures);
-        cout << "Prediction: " << prediction << endl;
-
         double rSquared = RSquared(x, y, learnedTheta);
         cout << "R-squared: " << rSquared << endl;
+    }
+
+    // Binary Classification
+    else if (models == 2)
+    {
+        vector<int> labels(records_IEEE.size());
+        // Logistic regression
+        cout << "Using logistic regression: " << endl;
+        for (size_t i = 0; i < records_IEEE.size(); ++i)
+        {
+            // labels is at the first column
+            labels[i] = records_IEEE[i][0];
+            for (size_t j = 0; j < records_IEEE[0].size() - 1; ++j)
+            {
+                x[i][j] = records_IEEE[i][j + 1];
+            }
+        }
+
+        vector<int> trainingLabel, testingLabel;
+        vector<vector<P>> trainingSet, testingSet;
+        double trainingRatio = 0.8;
+
+        // Create training set and testing set
+        splitVector(labels, trainingLabel, testingLabel, trainingRatio);
+        splitVector(x, trainingSet, testingSet, trainingRatio);
+
+        //double learningRate = 0.000002;
+        //int numIterations = 100;
+        LogisticRegression<P> logistic_model(trainingSet, trainingLabel, learningRate);
+
+        // Train the Logistic Regression
+        logistic_model.train(numIterations);
+
+        vector<int> result;
+        for (const auto &row : testingSet)
+        {
+            P prediction = logistic_model.predict(row);
+            int resultLabels = logistic_model.roundProbability(prediction,0.3);
+            result.push_back(resultLabels);  
+        }
+        cout << "Use " << trainingRatio << " total data for training the model." << endl;
+        cout << "Accuracy is " << accuracy(result, testingLabel) << "%" << endl;
     }
 }
 
 int main(int argc, char **argv)
 {
-    if (argc < 5)
+    if (argc < 7)
     {
-        cout << "usage: " << argv[0] << " <filename> <Posit size> <Exponent bit size> <DO or NOT DO regression>\n";
+        cout << "usage: " << argv[0] << " <filename> <Posit size> <Exponent bit size> <Regression/Classification> <number of iteration> <learning rate>\n";
         cout << "<filename> are usually in the format of \"TestingFiles/filename.csv\"\n";
         cout << "<Posit size> can be selected between 16 or 32 \n";
         cout << "<Exponent bit size> can be selected between 0,1,2 3 or 4 \n";
-        cout << "<DO or NOT DO regression> can be decided by using 0: not do regression, or other number: do regression \n\n";
-        cout << "Example: .\\main TestingFiles/climate_change.csv 32 2 1\n";
+        cout << "<Regression/Classification> can be decided by using 0: DON'T DO any model, or 1: do regression, or 2: do binary classfication \n\n";
+        cout << "Example: .\\main TestingFiles/Marketing_new.csv 32 2 1 100 0.002\n";
         return 1;
     }
 
@@ -718,36 +814,15 @@ int main(int argc, char **argv)
     size_t totalData = records[0].getFieldCount() * records.size();
     cout << "The total number of data is: " << totalData << endl;
 
-    // vector<vector<posit32_2>> records_posit32_2 = convertPosit<posit32_2>(records);
-
-    /**
-    for (const Record &record : records)
-    {
-        // Example: Print all fields
-        for (size_t i = 0; i < record.getFieldCount(); ++i)
-        {
-            cout << record.getField<double>(i) << ", ";
-        }
-        cout << endl;
-    }
-
-    vector<vector<posit32_1>> record_posit = convertPosit<posit32_1>(records);
-
-    for (const Record &record : records)
-    {
-        // Example: Print all fields
-        for (size_t i = 0; i < record.getFieldCount(); ++i)
-        {
-            cout << record.getField<float>(i) << ", ";
-        }
-        cout << endl;
-    }**/
-
     cout << endl;
 
     unsigned int p_size = stoi(argv[2]);
     unsigned int p_es = stoi(argv[3]);
-    bool regression = (stoi(argv[4]) != 0);
+    int models = stoi(argv[4]);
+
+    
+    int numIterations = stof(argv[5]);
+    double learningRate = stof(argv[6]);
 
     posit128_4 absErr;
     posit128_4 relErr;
@@ -757,29 +832,29 @@ int main(int argc, char **argv)
         if (p_es == 0)
         {
             cout << properties<16, 0>();
-            printResultPosit<posit16_0, double>(records, filename, p_size, p_es,regression);
+            printResultPosit<posit16_0, double>(records, filename, p_size, p_es, models,learningRate,numIterations);
         }
 
         else if (p_es == 1)
         {
             cout << properties<16, 1>();
-            printResultPosit<posit16_1, double>(records, filename, p_size, p_es,regression);
+            printResultPosit<posit16_1, double>(records, filename, p_size, p_es, models,learningRate,numIterations);
         }
         else if (p_es == 2)
         {
             cout << properties<16, 2>();
-            printResultPosit<posit16_2, double>(records, filename, p_size, p_es,regression);
+            printResultPosit<posit16_2, double>(records, filename, p_size, p_es, models,learningRate,numIterations);
         }
         else if (p_es == 3)
         {
             cout << properties<16, 3>();
-            printResultPosit<posit16_3, double>(records, filename, p_size, p_es,regression);
+            printResultPosit<posit16_3, double>(records, filename, p_size, p_es, models,learningRate,numIterations);
         }
 
         else if (p_es == 4)
         {
             cout << properties<16, 4>();
-            printResultPosit<posit16_4, double>(records, filename, p_size, p_es,regression);
+            printResultPosit<posit16_4, double>(records, filename, p_size, p_es, models,learningRate,numIterations);
         }
         else
         {
@@ -792,27 +867,27 @@ int main(int argc, char **argv)
         if (p_es == 0)
         {
             cout << properties<32, 0>();
-            printResultPosit<posit32_0, double>(records, filename, p_size, p_es,regression);
+            printResultPosit<posit32_0, double>(records, filename, p_size, p_es, models,learningRate,numIterations);
         }
         else if (p_es == 1)
         {
             cout << properties<32, 1>();
-            printResultPosit<posit32_1, double>(records, filename, p_size, p_es,regression);
+            printResultPosit<posit32_1, double>(records, filename, p_size, p_es, models,learningRate,numIterations);
         }
         else if (p_es == 2)
         {
             cout << properties<32, 2>();
-            printResultPosit<posit32_2, double>(records, filename, p_size, p_es,regression);
+            printResultPosit<posit32_2, double>(records, filename, p_size, p_es, models,learningRate,numIterations);
         }
         else if (p_es == 3)
         {
             cout << properties<32, 3>();
-            printResultPosit<posit32_3, double>(records, filename, p_size, p_es,regression);
+            printResultPosit<posit32_3, double>(records, filename, p_size, p_es, models,learningRate,numIterations);
         }
         else if (p_es == 4)
         {
             cout << properties<32, 4>();
-            printResultPosit<posit32_4, double>(records, filename, p_size, p_es,regression);
+            printResultPosit<posit32_4, double>(records, filename, p_size, p_es, models,learningRate,numIterations);
         }
         else
         {
@@ -828,11 +903,11 @@ int main(int argc, char **argv)
 
     cout << "====================================" << endl;
     cout << "Single vs Double: " << endl;
-    printResultIEEE<float, double>(records, regression);
+    printResultIEEE<float, double>(records, models,learningRate,numIterations);
 
     cout << "====================================" << endl;
     cout << "Double vs Double: " << endl;
-    printResultIEEE<double, double>(records, regression);
+    printResultIEEE<double, double>(records, models,learningRate,numIterations);
 
     // vector<vector<float>> records_float = convertPosit<float>(records);
 

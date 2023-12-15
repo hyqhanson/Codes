@@ -1,37 +1,62 @@
-#ifndef CLASS
-#define CLASS
+#ifndef CLASS_H
+#define CLASS_H
 
-#include <iostream>
 #include <vector>
 #include <universal/number/posit/posit.hpp>
 
-using namespace sw::universal;
-using namespace std;
-
 template <typename P>
-class MultipleLinearRegression
-{
+class MultipleLinearRegression {
 private:
     int numFeatures; // Number of features
-    vector<P> theta; // Parameters
+    std::vector<P> theta; // Parameters
     P learningRate;  // Learning rate for gradient descent
 
 public:
     MultipleLinearRegression(int numFeatures, double learningRate);
 
     // Hypothesis function for multiple linear regression
-    P hypothesis(const vector<P> &features) const;
+    P hypothesis(const std::vector<P> &features) const;
 
     // Train the model using gradient descent
-    void train(const vector<vector<P>> &X, const vector<P> &y, int numIterations);
+    void train(const std::vector<std::vector<P>> &X, const std::vector<P> &y, int numIterations);
 
     // Make predictions using the trained model
-    P predict(const vector<P> &features) const;
+    P predict(const std::vector<P> &features) const;
 
     // Get the learned parameters (theta values)
-    vector<P> getTheta() const;
+    std::vector<P> getTheta() const;
 
-    P Cost(const vector<vector<P>> &X, const vector<P> &y) const;
+    P Cost(const std::vector<std::vector<P>> &X, const std::vector<P> &y) const;
+};
+
+template <typename P>
+class LogisticRegression {
+private:
+    std::vector<std::vector<P>> data;  // Input data
+    std::vector<int> labels;                // Class labels (0 or 1)
+    std::vector<P> weights;            // Parameters (weights)
+    P bias;                           // Bias term
+    P learningRate;                    // Learning rate for optimization
+
+public:
+    LogisticRegression(const std::vector<std::vector<P>>& input_data, const std::vector<int>& input_labels,
+                       double learning_rate);
+
+    // Logistic function (sigmoid)
+    P sigmoid(P z) const;
+
+    // Logistic Regression prediction function
+    P predict(const std::vector<P>& input) const;
+
+    double crossEntropyLoss() const;
+
+    // Train the Logistic Regression using gradient descent
+    void train(int numIterations);
+
+    // Display the learned parameters (weights and bias)
+    void displayParameters() const;
+
+    int roundProbability(P probability, P threshold);
 };
 
 #endif

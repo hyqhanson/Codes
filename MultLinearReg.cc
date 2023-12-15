@@ -61,7 +61,7 @@ void MultipleLinearRegression<P>::train(const vector<vector<P>> &X, const vector
         {
             //cout << "gradiant at j = " << j << " " << gradient[j] << endl;
             //cout << "theta at j = " << j << " " << theta[j] << endl;
-            theta[j] = theta[j] - (2 * learningRate / m) * gradient[j];
+            theta[j] = theta[j] - (learningRate / m) * gradient[j];
             //cout << theta[j] << endl;
         }
         //cout << endl;
