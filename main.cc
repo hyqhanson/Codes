@@ -802,7 +802,7 @@ int main(int argc, char **argv)
         cout << "<Posit size> can be selected between 16 or 32 \n";
         cout << "<Exponent bit size> can be selected between 0,1,2 3 or 4 \n";
         cout << "<Regression/Classification> can be decided by using 0: DON'T DO any model, or 1: do regression, or 2: do binary classfication \n\n";
-        cout << "Example: .\\main TestingFiles/Marketing_new.csv 32 2 1 100 0.002\n";
+        cout << "Example: .\\main TestingFiles/Marketing.csv 32 2 1 1000 0.00002\n";
         return 1;
     }
 
