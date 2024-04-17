@@ -1,5 +1,5 @@
 CXX = g++
-CXXFLAGS = -Wall
+CXXFLAGS = -std=c++17 -Wall 
 
 SRCS = main.cc MultLinearReg.cc Logistic.cc
 OBJS = $(SRCS:.cc=.o)
