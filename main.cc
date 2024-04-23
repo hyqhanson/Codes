@@ -4,10 +4,12 @@
 #include <vector>
 #include <string>
 #include <stdexcept>
+#include <chrono>
 #include <universal/number/posit/posit.hpp>
 #include "class.h"
 #include "MultLinearReg.cc"
 #include "Logistic.cc"
+#include "Scaling.cc"
 
 using namespace sw::universal;
 using namespace std;
@@ -324,7 +326,6 @@ double tol_test(vector<vector<P>> record_posit, vector<Record> records)
     return percentage;
 }
 
-
 // Generic function to split a vector into training and testing sets
 template <typename T>
 void splitVector(const vector<T> &original,
@@ -438,7 +439,6 @@ double accuracy(const vector<T> &predicted, const vector<T> &actual)
         if (predicted[i] == actual[i])
         {
             correctCount++;
-            
         }
     }
 
@@ -525,12 +525,22 @@ void exportToCSV(const vector<vector<P>> &data, const string &filename)
 
 // Print the errors corresponding to a precision
 template <typename P, typename T>
-void printResultPosit(vector<Record> records, string filename, int size, int es, int models, double learningRate, int numIterations)
+void printResultPosit(vector<Record> records, string filename, int size, int es, int models, double learningRate, int numIterations, unsigned seed)
 {
-
     vector<vector<P>> records_posit = convertPosit<P>(records);
 
     cout << setprecision(15);
+    P Max = 0;
+    P Min = 0;
+    findMaxMin<P>(records_posit, Max, Min);
+    cout << "Max value: " << Max << ", "
+         << "Min value:" << Min << endl;
+
+    // Create a scaling record
+    vector<vector<P>> scaled_record(records_posit.size(), vector<P>(records_posit[0].size()));
+
+    minMaxScaling(records_posit, Max, Min, scaled_record);
+
     posit128_4 absErr = absError<P, T>(records_posit, records);
     cout << "Posit vs Double absolute error: " << absErr << endl;
 
@@ -552,7 +562,8 @@ void printResultPosit(vector<Record> records, string filename, int size, int es,
     stringstream name;
     name << "Generated_files/Generated_" << fname << '_' << to_string(size) << '_' << to_string(es) << ".csv";
 
-    exportToCSV(records_posit, name.str());
+    exportToCSV(scaled_record, name.str());
+    // exportToCSV(records_posit, name.str());
 
     cout << endl;
 
@@ -596,17 +607,19 @@ void printResultPosit(vector<Record> records, string filename, int size, int es,
         for (size_t i = 0; i < records_posit.size(); ++i)
         {
             // y is at the first column
-            y[i] = records_posit[i][0];
+            // y[i] = records_posit[i][0];
+            y[i] = scaled_record[i][0];
             for (size_t j = 0; j < records_posit[0].size() - 1; ++j)
             {
-                x[i][j] = records_posit[i][j + 1];
+                // x[i][j] = records_posit[i][j + 1];
+                x[i][j] = scaled_record[i][j + 1];
             }
         }
 
         int numFeatures = x[0].size();
-        //double learningRate = 0.00002;
-        //int numIterations = 1000;
-        MultipleLinearRegression<P> model(numFeatures, learningRate);
+        // double learningRate = 0.00002;
+        // int numIterations = 1000;
+        MultipleLinearRegression<P> model(numFeatures, learningRate, seed);
         model.train(x, y, numIterations);
 
         cout << setprecision(10);
@@ -617,6 +630,13 @@ void printResultPosit(vector<Record> records, string filename, int size, int es,
             cout << thetaValue << " ";
         }
         cout << endl;
+
+        /**cout << learnedTheta[0] * (Max - Min) + Min << " ";
+        for (size_t i = 1; i < learnedTheta.size(); i++)
+        {
+            cout << learnedTheta[i] << " ";
+        }
+        cout << endl;**/
 
         double rSquared = RSquared(x, y, learnedTheta);
 
@@ -637,6 +657,7 @@ void printResultPosit(vector<Record> records, string filename, int size, int es,
             for (size_t j = 0; j < records_posit[0].size() - 1; ++j)
             {
                 x[i][j] = records_posit[i][j + 1];
+                // x[i][j] = scaled_record[i][j + 1];
             }
         }
 
@@ -648,8 +669,8 @@ void printResultPosit(vector<Record> records, string filename, int size, int es,
         splitVector(labels, trainingLabel, testingLabel, trainingRatio);
         splitVector(x, trainingSet, testingSet, trainingRatio);
 
-        //double learningRate = 0.000002;
-        //int numIterations = 100;
+        // double learningRate = 0.000002;
+        // int numIterations = 100;
         LogisticRegression<P> logistic_model(trainingSet, trainingLabel, learningRate);
 
         // Train the Logistic Regression
@@ -659,8 +680,8 @@ void printResultPosit(vector<Record> records, string filename, int size, int es,
         for (const auto &row : testingSet)
         {
             P prediction = logistic_model.predict(row);
-            int resultLabels = logistic_model.roundProbability(prediction,0.3);
-            result.push_back(resultLabels);  
+            int resultLabels = logistic_model.roundProbability(prediction, 0.3);
+            result.push_back(resultLabels);
         }
         cout << "Use " << trainingRatio << " total data for training the model." << endl;
         cout << "Accuracy is " << accuracy(result, testingLabel) << "%" << endl;
@@ -668,12 +689,21 @@ void printResultPosit(vector<Record> records, string filename, int size, int es,
 }
 
 template <typename P, typename T>
-void printResultIEEE(vector<Record> records, int models, double learningRate, int numIterations)
+void printResultIEEE(vector<Record> records, int models, double learningRate, int numIterations, unsigned seed)
 {
 
     vector<vector<P>> records_IEEE = convertPosit<P>(records);
 
     cout << setprecision(15);
+    P Max = 0;
+    P Min = 0;
+    findMaxMin<P>(records_IEEE, Max, Min);
+    cout << "Max value: " << Max << ", "
+         << "Min value:" << Min << endl;
+
+    // Create a scaling record
+    vector<vector<P>> scaled_record(records_IEEE.size(), vector<P>(records_IEEE[0].size()));
+
     posit128_4 absErr = absError<P, T>(records_IEEE, records);
     cout << "Absolute error: " << absErr << endl;
 
@@ -724,22 +754,25 @@ void printResultIEEE(vector<Record> records, int models, double learningRate, in
         for (size_t i = 0; i < records_IEEE.size(); ++i)
         {
             // y is at the first column
+            // y[i] = scaled_record[i][0];
             y[i] = records_IEEE[i][0];
             for (size_t j = 0; j < records_IEEE[0].size() - 1; ++j)
             {
+                // x[i][j] = scaled_record[i][j + 1];
                 x[i][j] = records_IEEE[i][j + 1];
             }
         }
 
         int numFeatures = x[0].size();
-        //double learningRate = 0.00002;
-        //int numIterations = 1000;
-        MultipleLinearRegression<P> model(numFeatures, learningRate);
+        double learningRate = 0.00002;
+        int numIterations = 1000;
+        MultipleLinearRegression<P> model(numFeatures, learningRate, seed);
         model.train(x, y, numIterations);
 
         cout << setprecision(10);
         vector<P> learnedTheta = model.getTheta();
         cout << "Learned Parameters (Theta): ";
+
         for (P thetaValue : learnedTheta)
         {
             cout << thetaValue << " ";
@@ -774,8 +807,8 @@ void printResultIEEE(vector<Record> records, int models, double learningRate, in
         splitVector(labels, trainingLabel, testingLabel, trainingRatio);
         splitVector(x, trainingSet, testingSet, trainingRatio);
 
-        //double learningRate = 0.000002;
-        //int numIterations = 100;
+        // double learningRate = 0.000002;
+        // int numIterations = 100;
         LogisticRegression<P> logistic_model(trainingSet, trainingLabel, learningRate);
 
         // Train the Logistic Regression
@@ -785,8 +818,8 @@ void printResultIEEE(vector<Record> records, int models, double learningRate, in
         for (const auto &row : testingSet)
         {
             P prediction = logistic_model.predict(row);
-            int resultLabels = logistic_model.roundProbability(prediction,0.3);
-            result.push_back(resultLabels);  
+            int resultLabels = logistic_model.roundProbability(prediction, 0.3);
+            result.push_back(resultLabels);
         }
         cout << "Use " << trainingRatio << " total data for training the model." << endl;
         cout << "Accuracy is " << accuracy(result, testingLabel) << "%" << endl;
@@ -795,6 +828,8 @@ void printResultIEEE(vector<Record> records, int models, double learningRate, in
 
 int main(int argc, char **argv)
 {
+    unsigned seed = chrono::system_clock::now().time_since_epoch().count();
+
     if (argc < 7)
     {
         cout << "usage: " << argv[0] << " <filename> <Posit size> <Exponent bit size> <Regression/Classification> <number of iteration> <learning rate>\n";
@@ -820,7 +855,6 @@ int main(int argc, char **argv)
     unsigned int p_es = stoi(argv[3]);
     int models = stoi(argv[4]);
 
-    
     int numIterations = stof(argv[5]);
     double learningRate = stof(argv[6]);
 
@@ -832,29 +866,29 @@ int main(int argc, char **argv)
         if (p_es == 0)
         {
             cout << properties<16, 0>();
-            printResultPosit<posit16_0, double>(records, filename, p_size, p_es, models,learningRate,numIterations);
+            printResultPosit<posit16_0, double>(records, filename, p_size, p_es, models, learningRate, numIterations, seed);
         }
 
         else if (p_es == 1)
         {
             cout << properties<16, 1>();
-            printResultPosit<posit16_1, double>(records, filename, p_size, p_es, models,learningRate,numIterations);
+            printResultPosit<posit16_1, double>(records, filename, p_size, p_es, models, learningRate, numIterations, seed);
         }
         else if (p_es == 2)
         {
             cout << properties<16, 2>();
-            printResultPosit<posit16_2, double>(records, filename, p_size, p_es, models,learningRate,numIterations);
+            printResultPosit<posit16_2, double>(records, filename, p_size, p_es, models, learningRate, numIterations, seed);
         }
         else if (p_es == 3)
         {
             cout << properties<16, 3>();
-            printResultPosit<posit16_3, double>(records, filename, p_size, p_es, models,learningRate,numIterations);
+            printResultPosit<posit16_3, double>(records, filename, p_size, p_es, models, learningRate, numIterations, seed);
         }
 
         else if (p_es == 4)
         {
             cout << properties<16, 4>();
-            printResultPosit<posit16_4, double>(records, filename, p_size, p_es, models,learningRate,numIterations);
+            printResultPosit<posit16_4, double>(records, filename, p_size, p_es, models, learningRate, numIterations, seed);
         }
         else
         {
@@ -867,27 +901,27 @@ int main(int argc, char **argv)
         if (p_es == 0)
         {
             cout << properties<32, 0>();
-            printResultPosit<posit32_0, double>(records, filename, p_size, p_es, models,learningRate,numIterations);
+            printResultPosit<posit32_0, double>(records, filename, p_size, p_es, models, learningRate, numIterations, seed);
         }
         else if (p_es == 1)
         {
             cout << properties<32, 1>();
-            printResultPosit<posit32_1, double>(records, filename, p_size, p_es, models,learningRate,numIterations);
+            printResultPosit<posit32_1, double>(records, filename, p_size, p_es, models, learningRate, numIterations, seed);
         }
         else if (p_es == 2)
         {
             cout << properties<32, 2>();
-            printResultPosit<posit32_2, double>(records, filename, p_size, p_es, models,learningRate,numIterations);
+            printResultPosit<posit32_2, double>(records, filename, p_size, p_es, models, learningRate, numIterations, seed);
         }
         else if (p_es == 3)
         {
             cout << properties<32, 3>();
-            printResultPosit<posit32_3, double>(records, filename, p_size, p_es, models,learningRate,numIterations);
+            printResultPosit<posit32_3, double>(records, filename, p_size, p_es, models, learningRate, numIterations, seed);
         }
         else if (p_es == 4)
         {
             cout << properties<32, 4>();
-            printResultPosit<posit32_4, double>(records, filename, p_size, p_es, models,learningRate,numIterations);
+            printResultPosit<posit32_4, double>(records, filename, p_size, p_es, models, learningRate, numIterations, seed);
         }
         else
         {
@@ -903,11 +937,11 @@ int main(int argc, char **argv)
 
     cout << "====================================" << endl;
     cout << "Single vs Double: " << endl;
-    printResultIEEE<float, double>(records, models,learningRate,numIterations);
+    printResultIEEE<float, double>(records, models, learningRate, numIterations, seed);
 
     cout << "====================================" << endl;
     cout << "Double vs Double: " << endl;
-    printResultIEEE<double, double>(records, models,learningRate,numIterations);
+    printResultIEEE<double, double>(records, models, learningRate, numIterations, seed);
 
     // vector<vector<float>> records_float = convertPosit<float>(records);
 
