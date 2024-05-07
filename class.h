@@ -1,72 +1,105 @@
 #ifndef CLASS_H
 #define CLASS_H
 
-#include <vector>
 #include <universal/number/posit/posit.hpp>
+#include <vector>
 
-template <typename P>
+template<typename P>
 class MultipleLinearRegression
 {
 private:
-    int numFeatures;      // Number of features
-    std::vector<P> theta; // Parameters
-    P learningRate;       // Learning rate for gradient descent
+  int numFeatures;      // Number of features
+  std::vector<P> theta; // Parameters
+  P learningRate;       // Learning rate for gradient descent
 
 public:
-    MultipleLinearRegression(int numFeatures, double learningRate, unsigned seed);
+  MultipleLinearRegression(int numFeatures, double learningRate, unsigned seed);
 
-    // Hypothesis function for multiple linear regression
-    P hypothesis(const std::vector<P> &features) const;
+  // Hypothesis function for multiple linear regression
+  P hypothesis(const std::vector<P>& features) const;
 
-    // Train the model using gradient descent
-    void train(const std::vector<std::vector<P>> &X, const std::vector<P> &y, int numIterations);
+  // Train the model using gradient descent
+  void train(const std::vector<std::vector<P>>& x,
+             const std::vector<P>& y,
+             int numIterations);
 
-    // Make predictions using the trained model
-    P predict(const std::vector<P> &features) const;
+  // Make predictions using the trained model
+  P predict(const std::vector<P>& features) const;
 
-    // Get the learned parameters (theta values)
-    std::vector<P> getTheta() const;
+  // Get the learned parameters (theta values)
+  std::vector<P> getTheta() const;
 
-    P Cost(const std::vector<std::vector<P>> &X, const std::vector<P> &y) const;
+  double Cost(const std::vector<std::vector<P>>& x, const std::vector<P>& y) const;
+
+  double MSE(const std::vector<std::vector<P>>& x,
+             const std::vector<double>& y) const;
 };
 
-template <typename P>
+template<typename P>
 class LogisticRegression
 {
 private:
-    std::vector<std::vector<P>> data; // Input data
-    std::vector<int> labels;          // Class labels (0 or 1)
-    std::vector<P> weights;           // Parameters (weights)
-    P bias;                           // Bias term
-    P learningRate;                   // Learning rate for optimization
+  std::vector<std::vector<P>> data; // Input data
+  std::vector<int> labels;          // Class labels (0 or 1)
+  std::vector<P> weights;           // Parameters (weights)
+  P bias;                           // Bias term
+  P learningRate;                   // Learning rate for optimization
 
 public:
-    LogisticRegression(const std::vector<std::vector<P>> &input_data, const std::vector<int> &input_labels,
-                       double learning_rate);
+  LogisticRegression(const std::vector<std::vector<P>>& input_data,
+                     const std::vector<int>& input_labels,
+                     double learning_rate);
 
-    // Logistic function (sigmoid)
-    P sigmoid(P z) const;
+  // Logistic function (sigmoid)
+  P sigmoid(P z) const;
 
-    // Logistic Regression prediction function
-    P predict(const std::vector<P> &input) const;
+  // Logistic Regression prediction function
+  P predict(const std::vector<P>& input) const;
 
-    double crossEntropyLoss() const;
+  double crossEntropyLoss() const;
 
-    // Train the Logistic Regression using gradient descent
-    void train(int numIterations);
+  // Train the Logistic Regression using gradient descent
+  void train(int numIterations);
 
-    // Display the learned parameters (weights and bias)
-    void displayParameters() const;
+  // Display the learned parameters (weights and bias)
+  void displayParameters() const;
 
-    int roundProbability(P probability, P threshold);
+  int roundProbability(P probability, P threshold);
 };
 
-inline double nearestPowerOfTwo(double num);
+// min-max
+inline double
+nearestPowerOfTwo(double num);
 
-template <typename P>
-void findMaxMin(std::vector<std::vector<P>> record_posit, P &Max, P &Min);
+template<typename P>
+void
+minMaxScaleColumn(std::vector<double>& column);
 
-template <typename P>
-void minMaxScaling(std::vector<std::vector<P>> record_posit, P Max, P Min, std::vector<std::vector<P>> &new_record);
+template<typename P>
+void
+minMaxScale2D(std::vector<std::vector<double>>& data);
+
+// Standard
+template<typename P>
+P calculateMean(const std::vector<P>& data);
+
+template<typename P>
+P calculateStdDev(const std::vector<P>& data, P mean);
+
+template<typename P>
+void standardize(std::vector<P>& data);
+
+template<typename P>
+void standard2D(std::vector<std::vector<P>>& data);
+
+// CG method
+template<typename T>
+T dotProduct(const std::vector<T>& a, const std::vector<T>& b);
+
+template<typename T>
+std::vector<T> multiplyMatrixVector(const std::vector<std::vector<T>>& A, const std::vector<T>& x);
+
+template<typename T>
+std::vector<T> conjugateGradient(const std::vector<std::vector<T>>& X, const std::vector<T>& y, size_t maxIterations, double tolerance);
 
 #endif

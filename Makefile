@@ -1,7 +1,7 @@
 CXX = g++
 CXXFLAGS = -std=c++17 -Wall 
 
-SRCS = main.cc MultLinearReg.cc Logistic.cc Scaling.cc
+SRCS = main.cc MultLinearReg.cc Logistic.cc Scaling.cc MultLinearReg_CG.cc
 OBJS = $(SRCS:.cc=.o)
 EXEC = main
 
