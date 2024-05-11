@@ -161,8 +161,6 @@ absError(vector<vector<P>> Record_posit, vector<vector<double>> Records)
   int zeros = 0;
   for (const auto& record : Records) {
     for (size_t i = 0; i < record.size(); ++i) {
-      // Avoid division by 0
-
       posit128_4 error = abs(record[i] - double(Record_posit[n][i]));
       // cout << record[i] << " " << Record_posit[n][i]<<endl;
       sum += error;
@@ -174,6 +172,27 @@ absError(vector<vector<P>> Record_posit, vector<vector<double>> Records)
     n++;
   }
   avgError = sum / (row * col - zeros);
+
+  return avgError;
+}
+
+// Overwrite mean absolute error just for the result
+template<typename P, typename T>
+posit128_4
+absError(vector<P> Record_posit, vector<vector<double>> Records)
+{
+  posit128_4 avgError = 0;
+  posit128_4 sum = 0;
+
+  int zeros = 0;
+  for (size_t i = 0; i < Records.size(); ++i) {
+    posit128_4 error = abs(Records[i][0] - double(Record_posit[i]));
+    sum += error;
+    if (Records[i][0] == 0) {
+      zeros++;
+    }
+  }
+  avgError = sum / Records.size();
 
   return avgError;
 }
@@ -205,6 +224,31 @@ relError(vector<vector<P>> Record_posit, vector<vector<double>> Records)
     n++;
   }
   avgError = sum / (row * col - zeros);
+
+  return avgError;
+}
+
+// Overwrite mean relative error just for the result
+template<typename P, typename T>
+posit128_4
+relError(vector<P> Record_posit, vector<vector<double>> Records)
+{
+
+  posit128_4 avgError = 0;
+  posit128_4 sum = 0;
+
+  int zeros = 0;
+  for (size_t i = 0; i < Records.size(); ++i) {
+    // Avoid division by 0
+    if (Records[i][0] != 0) {
+      posit128_4 error =
+        abs((Records[i][0] - double(Record_posit[i])) / Records[i][0]);
+      sum += error;
+    } else if (Records[i][0] == 0) {
+      zeros++;
+    }
+  }
+  avgError = sum / Records.size();
 
   return avgError;
 }
@@ -453,15 +497,50 @@ printRecord(const vector<vector<P>>& data)
 template<typename P, typename T>
 void
 printResultPosit(vector<vector<double>> Records,
+                 vector<vector<double>> scaled_Records,
                  string filename,
                  int size,
                  int es,
                  int models,
                  double learningRate,
                  int numIterations,
-                 unsigned seed)
+                 unsigned seed,
+                 int scaled,
+                 vector<vector<double>> scalingFactor)
 {
-  vector<vector<P>> Records_posit = convertPosit<P>(Records);
+  vector<vector<P>> Records_posit;
+  vector<double> yd(Records.size());
+  if (scaled == 0) {
+    Records_posit = convertPosit<P>(Records);
+    posit128_4 absErr = absError<P, T>(Records_posit, Records);
+    cout << "Posit vs Double absolute error: " << absErr << endl;
+
+    posit128_4 relErr = relError<P, T>(Records_posit, Records);
+    cout << "Posit vs Double relative error: " << relErr << endl;
+
+    double tol_test_pass = tol_test<P, T>(Records_posit, Records);
+    cout << "Posit vs Double tolerance test pass rate: " << setprecision(4)
+         << tol_test_pass << "%" << endl;
+
+    for (size_t i = 0; i < Records.size(); ++i) {
+      yd[i] = Records[i][0];
+    }
+  } else {
+    Records_posit = convertPosit<P>(scaled_Records);
+    posit128_4 absErr = absError<P, T>(Records_posit, scaled_Records);
+    cout << "Posit vs Double absolute error: " << absErr << endl;
+
+    posit128_4 relErr = relError<P, T>(Records_posit, scaled_Records);
+    cout << "Posit vs Double relative error: " << relErr << endl;
+
+    double tol_test_pass = tol_test<P, T>(Records_posit, scaled_Records);
+    cout << "Posit vs Double tolerance test pass rate: " << setprecision(4)
+         << tol_test_pass << "%" << endl;
+
+    for (size_t i = 0; i < Records.size(); ++i) {
+      yd[i] = scaled_Records[i][0];
+    }
+  }
 
   cout << setprecision(15);
   // P Max = 0;
@@ -474,16 +553,6 @@ printResultPosit(vector<vector<double>> Records,
   // vector<vector<P>>
   // scaled_Record(Records_posit.size(),vector<P>(Records_posit[0].size()));
   // minMaxScaling(Records_posit, Max, Min, scaled_Record);
-
-  posit128_4 absErr = absError<P, T>(Records_posit, Records);
-  cout << "Posit vs Double absolute error: " << absErr << endl;
-
-  posit128_4 relErr = relError<P, T>(Records_posit, Records);
-  cout << "Posit vs Double relative error: " << relErr << endl;
-
-  double tol_test_pass = tol_test<P, T>(Records_posit, Records);
-  cout << "Posit vs Double tolerance test pass rate: " << setprecision(4)
-       << tol_test_pass << "%" << endl;
 
   // Export posit file
   string fname = filename.erase(filename.length() - 4);
@@ -505,7 +574,6 @@ printResultPosit(vector<vector<double>> Records,
   vector<vector<P>> x(Records_posit.size(),
                       vector<P>(Records_posit[0].size() - 1));
   vector<P> y(Records_posit.size());
-  vector<double> yd(Records.size());
 
   if (models == 1) {
     // Simple Linear regression
@@ -530,7 +598,17 @@ printResultPosit(vector<vector<double>> Records,
       vector<P> theta = { intercept, slope };
 
       double rSquared = RSquared(x, y, theta);
-      cout << "R-squared: " << rSquared << endl << endl;
+      cout << "R-squared: " << rSquared << endl;
+
+      double mse = 0.0;
+      for (size_t i = 0; i < x.size(); ++i) {
+        double error = (double)(slope * x[i][0] + intercept) - (double)y[i];
+        mse += error * error;
+      }
+
+      mse /= x.size();
+
+      cout << "MSE: " << mse << endl << endl;
     }
 
     // Multiple linear regression
@@ -538,7 +616,6 @@ printResultPosit(vector<vector<double>> Records,
     for (size_t i = 0; i < Records_posit.size(); ++i) {
       // y is at the first column
       y[i] = Records_posit[i][0];
-      yd[i] = Records[i][0];
       for (size_t j = 0; j < Records_posit[0].size() - 1; ++j) {
         x[i][j] = Records_posit[i][j + 1];
       }
@@ -548,9 +625,10 @@ printResultPosit(vector<vector<double>> Records,
     // double learningRate = 0.00002;
     // int numIterations = 1000;
     MultipleLinearRegression<P> model(numFeatures, learningRate, seed);
-    model.train(x, y, numIterations);
+    // model.train(x, y, numIterations);
+    model.train_stoch(x, y, numIterations);
 
-    cout << setprecision(10);
+    cout << setprecision(15);
     vector<P> learnedTheta = model.getTheta();
     cout << "Learned Parameters (Theta): ";
     for (P thetaValue : learnedTheta) {
@@ -558,18 +636,48 @@ printResultPosit(vector<vector<double>> Records,
     }
     cout << endl;
 
-    /**cout << learnedTheta[0] * (Max - Min) + Min << " ";
-    for (size_t i = 1; i < learnedTheta.size(); i++)
-    {
-        cout << learnedTheta[i] << " ";
-    }
-    cout << endl;**/
-
     double rSquared = RSquared(x, y, learnedTheta);
     double mse = model.MSE(x, yd);
 
+    if (scaled != 0) {
+      vector<double> result;
+      // scaling factor 1 = min or mean
+      double factor1 = scalingFactor[0][0];
+      // scaling factor 2 = max or StdDev
+      double factor2 = (scalingFactor[0][1]);
+
+      double mse_restore = 0.0;
+
+      // min-max
+      if (scaled == 1) {
+        for (size_t i = 0; i < x.size(); ++i) {
+          result.push_back((double)model.hypothesis(x[i]));
+          result[i] = result[i] * (factor2 - factor1) + factor1;
+          double error = result[i] - Records[i][0];
+          mse_restore += error * error;
+        }
+      }
+      // standard
+      else if (scaled == 2) {
+        for (size_t i = 0; i < x.size(); ++i) {
+          result.push_back((double)model.hypothesis(x[i]));
+          result[i] = result[i] * factor2 + factor1;
+          double error = result[i] - Records[i][0];
+
+          mse_restore += error * error;
+        }
+      }
+
+      mse_restore /= x.size();
+      cout << "MSE restored: " << mse_restore << endl;
+      posit128_4 absolute_error = absError<T, T>(result, Records);
+      cout << "Absolute error: " << absolute_error << endl;
+      posit128_4 relative_error = relError<T, T>(result, Records);
+      cout << "Relative error: " << relative_error << endl;
+    }
     cout << "R-squared: " << rSquared << endl;
     cout << "MSE: " << mse << endl;
+
     cout << endl;
   }
 
@@ -642,42 +750,56 @@ printResultPosit(vector<vector<double>> Records,
 template<typename P, typename T>
 void
 printResultIEEE(vector<vector<double>> Records,
+                vector<vector<double>> scaled_Records,
                 int models,
                 double learningRate,
                 int numIterations,
-                unsigned seed)
+                unsigned seed,
+                int scaled,
+                vector<vector<double>> scalingFactor)
 {
 
-  vector<vector<P>> Records_IEEE = convertPosit<P>(Records);
+  vector<vector<P>> Records_IEEE;
+  vector<double> yd(Records.size());
+  if (scaled == 0) {
+    Records_IEEE = convertPosit<P>(Records);
+    posit128_4 absErr = absError<P, T>(Records_IEEE, Records);
+    cout << "Posit vs Double absolute error: " << absErr << endl;
+
+    posit128_4 relErr = relError<P, T>(Records_IEEE, Records);
+    cout << "Posit vs Double relative error: " << relErr << endl;
+
+    double tol_test_pass = tol_test<P, T>(Records_IEEE, Records);
+    cout << "Posit vs Double tolerance test pass rate: " << setprecision(4)
+         << tol_test_pass << "%" << endl;
+
+    for (size_t i = 0; i < Records.size(); ++i) {
+      yd[i] = Records[i][0];
+    }
+  } else {
+    Records_IEEE = convertPosit<P>(scaled_Records);
+    posit128_4 absErr = absError<P, T>(Records_IEEE, scaled_Records);
+    cout << "Posit vs Double absolute error: " << absErr << endl;
+
+    posit128_4 relErr = relError<P, T>(Records_IEEE, scaled_Records);
+    cout << "Posit vs Double relative error: " << relErr << endl;
+
+    double tol_test_pass = tol_test<P, T>(Records_IEEE, scaled_Records);
+    cout << "Posit vs Double tolerance test pass rate: " << setprecision(4)
+         << tol_test_pass << "%" << endl;
+
+    for (size_t i = 0; i < Records.size(); ++i) {
+      yd[i] = scaled_Records[i][0];
+    }
+  }
 
   cout << setprecision(15);
-  // P Max = 0;
-  // P Min = 0;
-  // findMaxMin<P>(Records_IEEE, Max, Min);
-  // cout << "Max value: " << Max << ", "
-  //      << "Min value:" << Min << endl;
-
-  // Create a scaling record
-  // vector<vector<P>>
-  // scaled_Record(Records_IEEE.size(),vector<P>(Records_IEEE[0].size()));
-  // minMaxScaling(Records_IEEE, Max, Min, scaled_Record);
-
-  posit128_4 absErr = absError<P, T>(Records_IEEE, Records);
-  cout << "Absolute error: " << absErr << endl;
-
-  posit128_4 relErr = relError<P, T>(Records_IEEE, Records);
-  cout << "Relative error: " << relErr << endl;
-
-  double tol_test_pass = tol_test<P, T>(Records_IEEE, Records);
-  cout << "Tolerance test pass rate: " << setprecision(4) << tol_test_pass
-       << "%" << endl;
 
   cout << endl;
   /*************/
   vector<vector<P>> x(Records_IEEE.size(),
                       vector<P>(Records_IEEE[0].size() - 1));
   vector<P> y(Records_IEEE.size());
-  vector<double> yd(Records_IEEE.size());
 
   if (models == 1) {
     // Simple Linear regression
@@ -686,7 +808,6 @@ printResultIEEE(vector<vector<double>> Records,
       for (size_t i = 0; i < Records_IEEE.size(); ++i) {
         // y is at the first column
         y[i] = Records_IEEE[i][0];
-        yd[i] = Records[i][0];
         for (size_t j = 0; j < Records_IEEE[0].size() - 1; ++j) {
           x[i][j] = Records_IEEE[i][1];
         }
@@ -711,7 +832,6 @@ printResultIEEE(vector<vector<double>> Records,
     for (size_t i = 0; i < Records_IEEE.size(); ++i) {
       // y is at the first column
       y[i] = Records_IEEE[i][0];
-      yd[i] = Records[i][0];
       for (size_t j = 0; j < Records_IEEE[0].size() - 1; ++j) {
         x[i][j] = Records_IEEE[i][j + 1];
       }
@@ -721,9 +841,10 @@ printResultIEEE(vector<vector<double>> Records,
     // double learningRate = 0.00004;
     // int numIterations = 1000;
     MultipleLinearRegression<P> model(numFeatures, learningRate, seed);
-    model.train(x, y, numIterations);
+    // model.train(x, y, numIterations);
+    model.train_stoch(x, y, numIterations);
 
-    cout << setprecision(10);
+    cout << setprecision(15);
     vector<P> learnedTheta = model.getTheta();
     cout << "Learned Parameters (Theta): ";
 
@@ -734,8 +855,46 @@ printResultIEEE(vector<vector<double>> Records,
 
     double rSquared = RSquared(x, y, learnedTheta);
     double mse = model.MSE(x, yd);
+
+    if (scaled != 0) {
+      vector<P> result;
+      // scaling factor 1 = min or mean
+      P factor1 = scalingFactor[0][0];
+      // scaling factor 2 = max or StdDev
+      P factor2 = (scalingFactor[0][1]);
+
+      double mse_restore = 0.0;
+      // min-max
+      if (scaled == 1) {
+        for (size_t i = 0; i < x.size(); ++i) {
+          result.push_back(model.hypothesis(x[i]));
+          result[i] = result[i] * (factor2 - factor1) + factor1;
+          double error = (double)result[i] - Records[i][0];
+          mse_restore += error * error;
+        }
+      }
+      // standard
+      else if (scaled == 2) {
+        for (size_t i = 0; i < x.size(); ++i) {
+          result.push_back((double)model.hypothesis(x[i]));
+          result[i] = result[i] * factor2 + factor1;
+
+          double error = result[i] - Records[i][0];
+
+          mse_restore += error * error;
+        }
+      }
+      mse_restore /= x.size();
+      cout << "MSE restored: " << mse_restore << endl;
+      posit128_4 absolute_error = absError<P, T>(result, Records);
+      cout << "Absolute error: " << absolute_error << endl;
+      posit128_4 relative_error = relError<P, T>(result, Records);
+      cout << "Relative error: " << relative_error << endl;
+    }
     cout << "R-squared: " << rSquared << endl;
     cout << "MSE: " << mse << endl;
+
+    cout << endl;
   }
 
   // Binary Classification
@@ -852,12 +1011,15 @@ main(int argc, char** argv)
   double learningRate = stof(argv[6]);
 
   // Scaling
+  vector<vector<double>> scaled_Records(Records.size(),
+                                        vector<double>(Records[0].size(), 0.0));
+  vector<vector<double>> scalingFactor;
   if (scale == 1) {
-     cout << "Using min-max" << endl;
-    minMaxScale2D(Records);
+    cout << "Using min-max" << endl;
+    minMaxScale2D(Records, scaled_Records, scalingFactor);
   } else if (scale == 2) {
     cout << "Using standard" << endl;
-    standard2D(Records);
+    standard2D(Records, scaled_Records, scalingFactor);
   }
 
   posit128_4 absErr;
@@ -867,26 +1029,16 @@ main(int argc, char** argv)
   {                                                                            \
     printf("Posit<%d,%d> \n", size, r);                                        \
     printResultPosit<posit<size, r>, double>(Records,                          \
+                                             scaled_Records,                   \
                                              filename,                         \
                                              p_size,                           \
                                              r,                                \
                                              models,                           \
                                              learningRate,                     \
                                              numIterations,                    \
-                                             seed);                            \
-  }
-
-#define withScale(size, r)                                                     \
-  {                                                                            \
-    printf("Posit<%d,%d> \n", size, r);                                        \
-    printResultPosit<posit<size, r>, double>(scaled_Record,                    \
-                                             filename,                         \
-                                             p_size,                           \
-                                             r,                                \
-                                             models,                           \
-                                             learningRate,                     \
-                                             numIterations,                    \
-                                             seed);                            \
+                                             seed,                             \
+                                             scale,                            \
+                                             scalingFactor);                   \
   }
 
   if (p_size == 16) {
@@ -909,13 +1061,25 @@ main(int argc, char** argv)
 
   cout << "====================================" << endl;
   cout << "Single vs Double: " << endl;
-  printResultIEEE<float, double>(
-    Records, models, learningRate, numIterations, seed);
+  printResultIEEE<float, double>(Records,
+                                 scaled_Records,
+                                 models,
+                                 learningRate,
+                                 numIterations,
+                                 seed,
+                                 scale,
+                                 scalingFactor);
 
   cout << "====================================" << endl;
   cout << "Double vs Double: " << endl;
-  printResultIEEE<double, double>(
-    Records, models, learningRate, numIterations, seed);
+  printResultIEEE<double, double>(Records,
+                                  scaled_Records,
+                                  models,
+                                  learningRate,
+                                  numIterations,
+                                  seed,
+                                  scale,
+                                  scalingFactor);
 
   // vector<vector<float>> Records_float = convertPosit<float>(Records);
 
