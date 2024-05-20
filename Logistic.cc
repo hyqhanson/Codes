@@ -13,7 +13,7 @@ LogisticRegression<P>::LogisticRegression(const vector<vector<P>> &input_data, c
     : data(input_data), labels(input_labels), learningRate(learning_rate)
 {
     // Initialize weights and bias
-    weights.resize(data[0].size(), (P)rand() / RAND_MAX);
+    weights.resize(data[0].size(), (P)rand() / (P)RAND_MAX);
     bias = 0.0;
 }
 
@@ -21,7 +21,7 @@ LogisticRegression<P>::LogisticRegression(const vector<vector<P>> &input_data, c
 template <typename P>
 P LogisticRegression<P>::sigmoid(P z) const
 {
-    return 1.0 / (1.0 + exp(-z));
+    return (P)1.0 / ((P)1.0 + exp(-z));
 }
 
 // Implementation of the prediction function
@@ -38,7 +38,6 @@ P LogisticRegression<P>::predict(const vector<P> &input) const
     return sigmoid(z);
 }
 
-
 // Implementation of the training function
 template <typename P>
 void LogisticRegression<P>::train(int numIterations)
@@ -50,9 +49,9 @@ void LogisticRegression<P>::train(int numIterations)
     {
         for (size_t i = 0; i < numExamples; ++i)
         {
-            P y = labels[i];
+            int y = labels[i];
             P prediction = predict(data[i]);
-            P error = prediction - y;
+            P error = prediction - (P)y;
 
             // Update weights and bias based on the error
             for (size_t j = 0; j < numFeatures; ++j)
@@ -61,7 +60,6 @@ void LogisticRegression<P>::train(int numIterations)
             }
             bias -= learningRate * error;
         }
-       
     }
 }
 
@@ -78,8 +76,7 @@ void LogisticRegression<P>::displayParameters() const
 }
 
 template <typename P>
-int LogisticRegression<P>::roundProbability(P probability, P threshold)
+int LogisticRegression<P>::roundProbability(P probability, double threshold)
 {
-    return (probability >= threshold) ? 1 : 0;
+    return ((double)probability >= threshold) ? 1 : 0;
 }
-
